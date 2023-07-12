@@ -1,3 +1,4 @@
+import sys
 import os
 import time
 import shutil
@@ -16,18 +17,38 @@ def download(url, file_name):
         # get request
         response = get(url, headers=headers)
         # write to file
-        print('downloading: ' + url + ' to ' + file_name)
+        print( url + ' --> ' + str(file_name) + '\n')
         file.write(response.content)
 
-textFileName = 'UVC360-images.txt'
+exportFolder = 'exports'
+if os.path.isdir(exportFolder) == False:
+    os.mkdir(exportFolder)
 scriptPath = Path(os.path.dirname(__file__))
+downloadedImagesFolder = Path(exportFolder, 'images')
 os.chdir(scriptPath)
 
+while True:
+    wordpressExportFile = input('Enter the file name or path to XML export from wordpress:\n')
+
+    if wordpressExportFile.strip() != '' and os.path.isfile(wordpressExportFile):
+        wordpressExportFile = Path(wordpressExportFile)
+        break
+    elif wordpressExportFile.strip() != '' and os.path.isfile(wordpressExportFile) == False:
+        print('[Error]: Can\'t find file at: ' + wordpressExportFile + '\n')
+    else:
+        print('[Error]: File name or path is required.\n')
+
+textFileName = Path(exportFolder, wordpressExportFile.stem + '_images-report.txt')
+
 ns = {
-    'content': 'http://purl.org/rss/1.0/modules/content/'
+    'content': 'http://purl.org/rss/1.0/modules/content/',
+    'wp': 'http://wordpress.org/export/1.2/',
+    'dc': 'http://purl.org/dc/elements/1.1/',
+    'wfw': 'http://wellformedweb.org/CommentAPI/',
+    'excerpt': 'http://wordpress.org/export/1.2/excerpt/'
 }
 parser = LXML.XMLParser(strip_cdata=False)
-xmlFile = LXML.parse(scriptPath / 'tru-dsmartuvc.WordPress.2023-07-10_published.xml', parser)
+xmlFile = LXML.parse(scriptPath / wordpressExportFile, parser)
 root = xmlFile.getroot()
 images = []
 itemsWithImages = {}
@@ -64,7 +85,7 @@ if images:
 
     images.sort()
 
-    print('Number of images: ' + str(len(images)))
+    print('\nNumber of images found: ' + str(len(images)))
 
     if os.path.isfile(textFileName):
         os.remove(textFileName)
@@ -79,30 +100,32 @@ if images:
         f.write('\nItems with images: \n')
 
         for key, value in itemsWithImages.items():
-            f.write('Item ' + str(key) + ': \n' + str(value['title']) + '\n')
+            f.write('Item ' + str(key) + ': \n')
+            f.write('Title: ' + str(value['title']) + '\n')
             f.write('-----------------------------------\n')
             for idx4, imageUrl in enumerate(value['images'], 1):
-                f.write(str(idx4) + ' - ' + url2pathname(imageUrl.path) + '\n')
+                f.write(str(idx4) + ' - ' + 'images/' + url2pathname(imageUrl.path) + '\n')
 
             f.write('\n')
 
-        
+    print('\nDownloading all images...\n')
 
-    if os.path.isdir('images'):
-        shutil.rmtree('images')
+    if os.path.isdir(downloadedImagesFolder):
+        shutil.rmtree(downloadedImagesFolder)
 
-    os.mkdir('images')
-    os.chdir('images')
+    os.mkdir(downloadedImagesFolder)
 
-    for image in images:
-        imagePath = url2pathname(urlparse.urlparse(image).path)
+    for idx, image in enumerate(images, 1):
+        imagePath = downloadedImagesFolder / str( '.' + url2pathname(urlparse.urlparse(image).path))
         
         if os.path.dirname(imagePath):
-            os.makedirs('.' + os.path.dirname(imagePath), exist_ok=True)
-        download(image, '.' + imagePath)
+            os.makedirs(os.path.dirname(imagePath), exist_ok=True)
+
+        print('Downloading image', idx, ':')
+        download(image, imagePath)
         # time.sleep(1)
 
-    os.chdir('../')
+    print('Text file of report can be found at:', textFileName)
 
 else:
     print('-----------------------------------')
